@@ -48,8 +48,8 @@ source('helpers.R')
 #################################
 dashboardPage(skin = "red", dashboardHeader(title = "Movie Recommender"),
               dashboardSidebar(tags$head(tags$link(rel = "stylesheet")),
-                               sidebarMenu(menuItem("Recommender by Genre (System I)", tabName="first",  icon=icon("star")),
-                                           menuItem("Collaborative Recommender (System II)", tabName = "second",  icon=icon("star")))),
+                               sidebarMenu(menuItem("Recommender by Genre (System I)", tabName="first"),
+                                           menuItem("Collaborative Recommender (System II)", tabName = "second"))),
               dashboardBody(tabItems(tabItem(tabName = "first",
                                              fluidRow(box(width = 12,title = "Step 1: Select Your Favorite Genre", 
                                                                              status = "info", solidHeader = TRUE, collapsible = TRUE,
