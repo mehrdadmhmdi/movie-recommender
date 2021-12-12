@@ -44,7 +44,7 @@ library(shinyjs)
 library(dplyr)
 library(tidyr)
 
-source('functions/helpers.R')
+source('helpers.R')
 #################################
 dashboardPage(skin = "red", dashboardHeader(title = "Movie Recommender"),
               dashboardSidebar(tags$head(tags$link(rel = "stylesheet")),
