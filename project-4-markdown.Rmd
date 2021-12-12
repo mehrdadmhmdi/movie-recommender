@@ -1,0 +1,237 @@
+---
+title: "STAT 542 Project 4"
+author: "Mehrdad Mohammadi - David Kim"
+date: "12/12/2021"
+output:
+  html_document: default
+  fontsize: 10pt
+header-includes:
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{amsthm}
+- \usepackage{amsmath}
+- \usepackage{amsfonts}
+- \usepackage{amscd}
+- \usepackage{amssymb}
+- \usepackage{xcolor}
+- \usepackage{bbm}
+---
+
+---
+\allowdisplaybreaks
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\p}{\mathbb{P}}
+\newcommand{\Proj}{\textbf{P}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Var}{\mathrm{Var}}
+\newcommand{\Hcal}{\mathcal{H}}
+\newcommand{\rootn}{\sqrt{n}}
+\newcommand{\pibf}{\bm{\pi}}
+\newcommand{\1}{\mathbb{1}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+
+# Table of Contents
+1.  [Part I:  Pre-Analysis ](#Part I:  Pre-Analysis)\
+2.  [Part II: Recommender System  by Genre ](#Part II: Recommender System  by Genre )\
+2.1 [Recommendation Schemes : top  most popular movies](##Recommendation Schemes : top  most popular movies in the genre)\
+2.2 [Recommendation Schemes : top  highly-rated ](##Recommendation Schemes : top  highly-rated )\
+3.  [Part III: Collaborative Recommender System](#Part III: Collaborative Recommender System)\
+3.1 [Recommendation Schemes: UBCF](##Recommendation Schemes: USER BASED COLLABORATIVE RECOMMENDER)\
+3.2 [Recommendation Schemes: IBCF](##Recommendation Schemes: IBCF)\
+3.3 [Evaluation](##Evaluation)
+
+```{r}
+# Pakcages
+library(devtools)
+library(recommenderlab)
+library(ggplot2)
+library(data.table)
+library(Matrix)
+library(dplyr)
+library(DT)
+library(reshape2)
+```
+
+# Part I:  Pre-Analysis 
+## Data
+```{r}
+#read data
+myurl  = "https://liangfgithub.github.io/MovieData/"
+# Ratings
+ratings = read.csv(paste0(myurl, 'ratings.dat?raw=true'), 
+                   sep = ':',
+                   colClasses = c('integer', 'NULL'), 
+                   header = FALSE)
+colnames(ratings) = c('UserID', 'MovieID', 'Rating', 'Timestamp')
+ratings$Timestamp = NULL
+# Movie
+movies = readLines(paste0(myurl, 'movies.dat?raw=true'))
+movies = strsplit(movies, split = "::", fixed = TRUE, useBytes = TRUE)
+movies = matrix(unlist(movies), ncol = 3, byrow = TRUE)
+movies = data.frame(movies, stringsAsFactors = FALSE)
+colnames(movies) = c('MovieID', 'Title', 'Genres')
+movies$MovieID = as.integer(movies$MovieID)
+movies$Title = iconv(movies$Title, "latin1", "UTF-8")
+
+small_image_url = "https://liangfgithub.github.io/MovieImages/"
+movies$image_url = sapply(movies$MovieID, 
+                          function(x) paste0(small_image_url, x, '.jpg?raw=true'))
+# User
+users = read.csv(paste0(myurl, 'users.dat?raw=true'),
+                 sep = ':', header = FALSE)
+users = users[, -c(2,4,6,8)] # skip columns
+colnames(users) = c('UserID', 'Gender', 'Age', 'Occupation', 'Zip-code')
+
+```
+
+# Part II: Recommender System  by Genre 
+
+## Genres in data
+```{r}
+# Genres in data
+#Splitting genres from movie table
+genre     <- as.data.frame(movies$Genres, stringsAsFactors=FALSE)
+#Classifies each movie into different categories
+genre_new <- as.data.frame(tstrsplit(genre[,1], '[|]', type.convert=TRUE), stringsAsFactors=FALSE)
+
+#getting unique list of genres
+genre_list = c()
+for (j in 1:6) {
+genre_list = c(genre_list,unique(genre_new[,j]))
+}
+genre_list <- c(unique(na.omit(genre_list)))
+genre_matrix = matrix(0, nrow(movies), length(genre_list))
+for(i in 1:nrow(genre_new)){
+  genre_matrix[i,genre_list %in% genre_new[i,]]=1
+}
+colnames(genre_matrix) = genre_list
+remove("genre_new", "genre")
+genre_list
+```
+
+## Recommendation Schemes : top  most popular movies in the genre
+The movies that are highly rated i.e. at least 1000 users have rated the movie with ratings of 4 stars or 5 stars in the selected genre are recommended.
+```{r}
+selected_genre = "Action"
+
+ selectedMoviesByGenre = subset(movies, grepl(selected_genre, movies$Genres, fixed = TRUE), select = c(MovieID, Title))
+      
+      selectedMoviesByGenre$MovieID = as.integer(selectedMoviesByGenre$MovieID)
+      # Select movies with ratings >= 4
+      selectedMoviesByRating = subset(ratings, Rating>=4, select = c(MovieID, Rating))
+      system1Result = selectedMoviesByRating %>% inner_join(selectedMoviesByGenre, by= "MovieID")
+      rating_summary = system1Result %>% group_by(Rating) %>% summarise(rating_count=n())
+      
+      final_selected_movies = c()
+      if (rating_summary$rating_count[1] > 1000 || rating_summary$rating_count[2] > 1000) {
+        final_selected_movies = head(subset(system1Result[sample(nrow(system1Result), 50),], !duplicated(MovieID)), 10)
+      }
+      
+      final_selected_movies
+```
+
+## Recommendation Schemes : top  highly-rated 
+
+The movies that are highly rated i.e. at least 1000 users have rated the movie with ratings of 5 stars in the selected genre are recommended.
+
+```{r}
+selected_genre = "Action"
+
+ selectedMoviesByGenre = subset(movies, grepl(selected_genre, movies$Genres, fixed = TRUE), select = c(MovieID, Title))
+      
+      selectedMoviesByGenre$MovieID = as.integer(selectedMoviesByGenre$MovieID)
+      # Select movies with ratings == 5
+      selectedMoviesByRating = subset(ratings, Rating==5, select = c(MovieID, Rating))
+      system1Result = selectedMoviesByRating %>% inner_join(selectedMoviesByGenre, by= "MovieID")
+      rating_summary = system1Result %>% group_by(Rating) %>% summarise(rating_count=n())
+      
+      final_selected_movies = c()
+      if (rating_summary$rating_count[1] > 1000 || rating_summary$rating_count[2] > 1000) {
+        final_selected_movies = head(subset(system1Result[sample(nrow(system1Result), 50),], !duplicated(MovieID)), 10)
+      }
+      
+      final_selected_movies
+```
+
+# Part III: Collaborative Recommender System 
+
+
+```{r}
+# 2.1.Training Test Split
+
+set.seed(8439)
+# create a utility matrix stored as a sparse matrix.
+i = paste0('u', ratings$UserID)
+j = paste0('m', ratings$MovieID)
+x = ratings$Rating
+tmp = data.frame(i, j, x, stringsAsFactors = T)
+Rmat = sparseMatrix(as.integer(tmp$i), as.integer(tmp$j), x = tmp$x)
+rownames(Rmat) = levels(tmp$i)
+colnames(Rmat) = levels(tmp$j)
+Rmat = new('realRatingMatrix', data = Rmat)
+e <- evaluationScheme(Rmat, method="split", train=0.8, given=15, goodRating=5)
+```
+
+## Recommendation Schemes: USER BASED COLLABORATIVE RECOMMENDER
+The assumption is that users with similar preferences will rate items similarly. Thus missing ratings for a user can be predicted by first finding a neighborhood of similar users and then aggregate the ratings of these users to form a prediction.
+
+The neighborhood is defined in terms of similarity between users, either by taking a given number of most similar users (k nearest neighbors)or all users within a given similarity threshold.  Our similarity measures is $\textbf{Cosine similarity}$ and $\textbf{we used default values on the similarity measure}$. As default values shown in the codes below for these parameter.
+```{r}
+##### USER BASED COLLABORATIVE RECOMMENDER ########
+recommenderRegistry$get_entries(dataType="realRatingMatrix")$UBCF_realRatingMatrix
+
+# Train a recommender system using R package
+rec_UBCF = Recommender(getData(e, "train"), "UBCF",
+                        parameter = list(normalize = 'Z-score', method = 'Cosine', nn = 25))
+# predict ratings for the users
+recom_UBCF = predict(rec_UBCF,getData(e, "known"), type="ratings")
+
+## save and read a recommender model
+saveRDS(rec_UBCF, file = "rec_UBCF.rds")
+rec_UBCF2 <- readRDS("rec_UBCF.rds")
+
+# A sample of predictions ratings for the users
+as(recom_UBCF, 'matrix')[1:3, 1:10]
+```
+
+
+## Recommendation Schemes: ITEM BASED COLLABORATIVE RECOMMENDER
+Item-based CF is a model-based approach which produces recommenda-
+tions based on the relationship between items inferred from the rating matrix. The assumption behind this approach is that users will prefer items that are similar to other items they like. The model-building step consists of calculating a similarity matrix containing all item-to-
+item similarities using a given similarity measure. Popular are again Pearson correlation and Cosine similarity. To make a recommendation based on the model we use the similarities to calculate a weighted
+sum of the user's ratings for related items. 
+Similar to user-based recommender algorithms, user-bias can be reduced by first normalizing
+the user-item rating matrix before computing the item-to-item similarity matrix.
+
+```{r}
+##### IBCF RECOMMENDER ########
+recommenderRegistry$get_entries(dataType="realRatingMatrix")$IBCF_realRatingMatrix
+# Train a recommender system using R package
+rec_IBCF = Recommender(getData(e, "train"), "IBCF",
+                       parameter = list(normalize = 'Z-score', method = 'Cosine', nn = 25))
+# predict ratings for the users
+recom_IBCF = predict(rec_IBCF,getData(e, "known"), type="ratings")
+
+## save and read a recommender model
+saveRDS(rec_IBCF, file = "rec_IBCF.rds")
+rec_IBCF2 <- readRDS("rec_IBCF.rds")
+# A sample of predictions ratings for the users
+as(recom_IBCF, 'matrix')[1:3, 1:10]
+```
+
+
+## Evaluation
+We can calculate the error between the prediction and the unknown part of the test data.
+```{r}
+error <- rbind(UBCF = calcPredictionAccuracy(recom_UBCF, getData(e, "unknown")),
+               IBCF = calcPredictionAccuracy(recom_IBCF, getData(e, "unknown")))
+error
+```
