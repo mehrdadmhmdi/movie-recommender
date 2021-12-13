@@ -21,4 +21,4 @@ Here the  User-Based Collaborative filtering algorithm is used.
 
 Download/clone the above repo and open the ui.R or server.R file in IDE and click on Run App .
 
-The app is hosted on shinyapps.io - 
+The app is hosted on shinyapps.io - https://mehrdadmhmdi.shinyapps.io/project4_movie_recommender/
